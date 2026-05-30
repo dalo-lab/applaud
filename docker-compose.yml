@@ -10,5 +10,6 @@ services:
       - "127.0.0.1:44471:44471"
     volumes:
       - ${HOME}/applaud-data:/data
+      - ${HOME}/applaud-data/recordings:/data/recordings
     extra_hosts:
       - "host.docker.internal:host-gateway"
