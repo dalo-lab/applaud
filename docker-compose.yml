@@ -11,5 +11,6 @@ services:
     volumes:
       - ${HOME}/applaud-data:/data
       - ${HOME}/applaud-data/recordings:/data/recordings
+      - ${HOME}/applaud-data/config:/data/config
     extra_hosts:
       - "host.docker.internal:host-gateway"
