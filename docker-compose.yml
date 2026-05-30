@@ -6,6 +6,8 @@ services:
     container_name: fieldops-applaud
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "127.0.0.1:44471:44471"
     volumes:
       - ${HOME}/applaud-data:/data
     extra_hosts:
