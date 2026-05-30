@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import openUrl from "open";
 import { logger } from "./logger.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, updateConfig } from "./config.js";
 import { ensureConfigDir, lockPath } from "./paths.js";
 import { authRouter } from "./routes/auth.js";
 import { configRouter } from "./routes/config.js";
@@ -61,6 +61,47 @@ function acquireLock(): boolean {
   return true;
 }
 
+/**
+ * Env-var bootstrap: pre-populate webhook config from environment variables.
+ * Lets Docker deployments configure the webhook without manual web UI setup.
+ * Only writes to settings.json when a value has actually changed.
+ *
+ * Supported vars:
+ *   APPLAUD_WEBHOOK_URL    — webhook target URL (e.g. http://host.docker.internal:8090/webhook/applaud)
+ *   APPLAUD_WEBHOOK_SECRET — HMAC-SHA256 signing secret
+ *
+ * FieldOps fork addition — commit: fieldops-slice1-env-webhook
+ */
+function applyEnvOverrides(): void {
+  const webhookUrl    = process.env.APPLAUD_WEBHOOK_URL?.trim();
+  const webhookSecret = process.env.APPLAUD_WEBHOOK_SECRET?.trim();
+  if (!webhookUrl && !webhookSecret) return;
+
+  const cfg            = loadConfig();
+  const currentWebhook = cfg.webhook;
+  const targetUrl      = webhookUrl ?? currentWebhook?.url ?? "";
+  const targetSecret   = webhookSecret ?? currentWebhook?.secret;
+
+  const alreadyCurrent =
+    currentWebhook?.enabled === true &&
+    currentWebhook?.url    === targetUrl &&
+    currentWebhook?.secret === targetSecret;
+
+  if (alreadyCurrent) return;
+
+  updateConfig({
+    webhook: {
+      url:     targetUrl,
+      enabled: true,
+      secret:  targetSecret,
+    },
+  });
+  logger.info(
+    { url: targetUrl, hasSecret: !!targetSecret },
+    "applaud: webhook config applied from environment variables",
+  );
+}
+
 function shouldOpenBrowser(): boolean {
   if (process.env.APPLAUD_NO_OPEN === "1") return false;
   if (process.env.SSH_CONNECTION || process.env.SSH_CLIENT) return false;
@@ -78,6 +119,9 @@ function shouldOpenBrowser(): boolean {
 
 async function main(): Promise<void> {
   ensureConfigDir();
+  // Env-var bootstrap: configure webhook from APPLAUD_WEBHOOK_URL / APPLAUD_WEBHOOK_SECRET
+  // before anything else reads config. No-op if vars are absent.
+  applyEnvOverrides();
   // Skip lock file in Docker — PID reuse makes it unreliable in containers
   if (!process.env.APPLAUD_CONFIG_DIR && !acquireLock()) {
     process.exit(1);
