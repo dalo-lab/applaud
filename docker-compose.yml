@@ -1,0 +1,12 @@
+services:
+  applaud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fieldops-applaud
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${HOME}/applaud-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
